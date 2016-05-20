@@ -54,6 +54,7 @@ function _init()
  curs = o_make(0, 0)
  cr = 0
  ct = 1
+ camx, camy = 0,0
  
  unhold=false
  turn=0
@@ -93,6 +94,28 @@ function _update()
   if ct > #tiles then ct = 1 end
  else
   o_imove(curs,arrowp())
+  
+  local xmin,ymin,xmax,ymax
+   = 0,0,0,0
+  
+  local tile=tiles[ct]
+  
+  for cell in all(tile) do
+   xmin = min(xmin,cell.o.x)
+   ymin = min(ymin,cell.o.y)
+   xmax = max(xmax,cell.o.x)
+   ymax = max(ymax,cell.o.y)
+  end
+  
+  xmin+=curs.x
+  ymin+=curs.y
+  xmax+=curs.x
+  ymax+=curs.y
+  
+  if (xmin <= camx)   camx-=1
+  if (ymin <= camy)   camy-=1
+  if (xmax >= camx+7) camx+=1
+  if (ymax >= camy+7) camy+=1
  end
  
  grid={}
@@ -171,7 +194,10 @@ end
 function play_draw(p,f,b)
  local tile=p[1]
  local dx,dy,r=p[2],p[3],p[4]
-  
+ 
+ dx -= camx
+ dy -= camy
+ 
  local kl=p[5]==1 and 14 or 13
  local kd=p[5]==1 and  8 or  1
   
@@ -259,7 +285,11 @@ function tile_make()
   tile[rng(1,#tile)].t = 1
  end
  
- for i=0,rng(0,3) do
+ if true then
+  tile[rng(1,#tile)].t = 3
+ end
+ 
+ for i=0,rng(0,2) do
   tile[rng(1,#tile)].t = 2
  end
  
