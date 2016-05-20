@@ -1,110 +1,240 @@
 pico-8 cartridge // http://www.pico-8.com
 version 7
 __lua__
-dirs = {
- {  1,  0 },
- {  0,  1 },
- { -1,  0 },
- {  0, -1 },
-}
-
-music(0)
+--music(0)
 
 played={}
-rtest = 0
+tiles={}
 
-function _init()
- for i=1,4 do
-  local tile = tile_make()
-  tile_play(tile,
-            rng(2,7),
-            rng(2,7),
-            rng(0,4),
-            i%2)
+function tile_make()
+ local tile={}
+ local o=o_make(0,0)
+
+ for i=0,rng(2,7) do
+  local cell = { 
+   o = o_copy(o),
+   t = 0, 
+  }
+ 
+  o_add(tile, o, cell)
+  add(tile, cell)
+  
+  repeat
+   o_imove(o,rng(0,4))
+  until not tile[o_coord(o)]
  end
+ 
+ for i=0,rng(0,3) do
+  tile[rng(1,#tile)].t = 2
+ end
+ 
+ return tile
 end
 
+function _init()
+ do
+  local cell={
+   o=o_make(0,0),
+   t=2,
+  }
+
+  start={}
+ 
+  o_add(start, cell.o, cell)
+  add(start, cell)
+ end
+
+ for i=1,4 do
+  add(tiles,tile_make())
+ end
+ 
+ tile_play(start,1,1,0,0)
+ tile_play(start,6,6,0,1)
+ 
+ curs = o_make(0, 0)
+ cr = 0
+ ct = 1
+ 
+ unhold=false
+ turn=0
+ grid={}
+ overlap={}
+end
+
+timer = 0
+debug = ""
 function _update()
- rtest += 1
+ timer += 1
+ debug = ""
+ 
+ unhold = unhold and btn(4) and btn(5)
+ 
+ if btn(4) then
+  if btn(5) 
+  and not unhold
+  and overlap[2] 
+  and not overlap[1] then
+   unhold=true
+   tile_play(tiles[ct],curs.x,curs.y,cr,turn)
+   turn = 1 - turn
+  elseif btnp(0) then
+   cr = rot(cr,-1)
+  elseif btnp(1) then
+   cr = rot(cr,1)
+  end
+ elseif btn(5) then
+  if btnp(0) then
+   ct += 1
+  elseif btnp(1) then
+   ct -= 1
+  end
+  
+  if ct < 1 then ct = #tiles end
+  if ct > #tiles then ct = 1 end
+ else
+  o_imove(curs,arrowp())
+ end
+ 
+ grid={}
+ overlap={}
+ 
+ for p in all(played) do
+  local tile=p[1]
+  local dx,dy,r=p[2],p[3],p[4]
+  
+  for cell in all(tile) do
+   local x,y = pos(cell.o)
+   local t = cell.t
+   
+   local rd = r
+   while rd > 0 do
+    x, y = -y, x
+    rd -= 1
+   end
+   
+   x += dx
+   y += dy
+    
+   if (t==1 and p[5]~=turn)
+   or (t==2 and p[5]==turn)
+   or  t==0 then
+    o_add(grid,o_make(x,y),t)
+   end
+  end
+ end
+ 
+ local tile = tiles[ct]
+ local dx,dy,r=curs.x,curs.y,cr
+ 
+ for cell in all(tile) do
+  local x,y = pos(cell.o)
+  local t = cell.t
+   
+  local rd = r
+  while rd > 0 do
+   x, y = -y, x
+   rd -= 1
+  end
+   
+  x += dx
+  y += dy
+   
+  o = o_make(x,y)
+  v = grid[o_coord(o)]  
+
+  overlap[v or 0] = true
+ end
 end
 
 function _draw()
  cls""
 
+ local cp =
+ {
+  tiles[ct],
+  curs.x,
+  curs.y,
+  cr,
+  turn
+ }
+
  for p in all(played) do
-  local tile=p[1]
-  local dx,dy,r=p[2],p[3],p[4]
-  
-  local kl=p[5]==1 and 14 or 13
-  local kd=p[5]==1 and  8 or  1
-  
-  for cell in all(tile) do
-   local x,y = pos(cell.o)
-   local t = cell.t
-   
-   local rd = 0
-   while rd > 0 do
-    x, y = -y, x
-    rd -= 1
-   end
-   
-   x += dx
-   y += dy
-   
-   local x,y = pos(cell.o)
-   local t = cell.t
-   
-   local rd = 0
-   while rd > 0 do
-    x, y = -y, x
-    rd -= 1
-   end
-   
-   x += dx
-   y += dy
-   
-   rectfill(x*16- 1,y*16- 1,
-            x*16+17,y*16+17,kd)
-  end
-  
-  for cell in all(tile) do
-   local x,y = pos(cell.o)
-   local t = cell.t
-   
-   local rd = 0
-   while rd > 0 do
-    x, y = -y, x
-    rd -= 1
-   end
-   
-   x += dx
-   y += dy
-   
-   for d=0,3 do
-    local n = o_move(cell.o,d)
-    
-    if not tile[o_coord(n)] then    
-     if d == 0 then
-      line(x*16+16,y*16,
-           x*16+16,y*16+16,kl)
-     elseif d == 1 then
-      line(x*16,   y*16+16,
-           x*16+16,y*16+16,kl)
-     elseif d == 2 then
-      line(x*16,   y*16,
-           x*16,   y*16+16,kl)
-     elseif d == 3 then
-      line(x*16,   y*16,
-           x*16+16,y*16,   kl)
-     end
-    end
-   end
-   spr(t*2,x*16,y*16,2,2)
-  end
+  play_draw(p)
  end
+ 
+ play_draw(cp,
+           true,
+           not overlap[2]
+           or overlap[1])
 end
 
-function play_border(p)
+function play_draw(p,f,b)
+ local tile=p[1]
+ local dx,dy,r=p[2],p[3],p[4]
+  
+ local kl=p[5]==1 and 14 or 13
+ local kd=p[5]==1 and  8 or  1
+  
+ for cell in all(tile) do
+  local x,y = pos(cell.o)
+  local t = cell.t
+   
+  local rd = r
+  while rd > 0 do
+   x, y = -y, x
+   rd -= 1
+  end
+   
+  x += dx
+  y += dy
+   
+  bg = b and 5 or kd
+   
+  rectfill(x*16- 1,y*16- 1,
+           x*16+17,y*16+17,bg)
+ end
+  
+ for cell in all(tile) do
+  local x,y = pos(cell.o)
+  local t = cell.t
+   
+  local rd = r
+  while rd > 0 do
+   x, y = -y, x
+   rd -= 1
+  end
+   
+  x += dx
+  y += dy
+   
+  pal(7, kl)
+  if f then flash(kl,7) end
+   
+  for d=0,3 do
+   local n = o_move(cell.o,
+                 rot(d,-r))
+    
+   if not tile[o_coord(n)] then    
+    if d == 0 then
+     line(x*16+16,y*16,
+          x*16+16,y*16+16,7)
+    elseif d == 1 then
+     line(x*16,   y*16+16,
+          x*16+16,y*16+16,7)
+    elseif d == 2 then
+     line(x*16,   y*16,
+          x*16,   y*16+16,7)
+    elseif d == 3 then
+     line(x*16,   y*16,
+          x*16+16,y*16,   7)
+    end
+   end
+  end
+  
+  pal()
+  
+  spr(t*2,x*16,y*16,2,2)
+ end
 end
 
 function tile_make()
@@ -114,15 +244,23 @@ function tile_make()
  for i=0,rng(2,7) do
   local cell = { 
    o = o_copy(o),
-   t = flr(rnd(4)) 
+   t = 0, 
   }
  
   o_add(tile, o, cell)
   add(tile, cell)
   
   repeat
-   o_imove(o,flr(rnd(4)))
+   o_imove(o,rng(0,4))
   until not tile[o_coord(o)]
+ end
+ 
+ if true then
+  tile[rng(1,#tile)].t = 1
+ end
+ 
+ for i=0,rng(0,3) do
+  tile[rng(1,#tile)].t = 2
  end
  
  return tile
@@ -193,9 +331,11 @@ function o_imove(o, d, l)
  return pos(o)
 end
 
+btns = { 2, 0, 3, 1 }
+
 function arrow()
  for i=0,3 do
-  if (btn(i)) return i
+  if (btn(i)) return btns[i+1]
  end
  
  return -1
@@ -203,14 +343,27 @@ end
 
 function arrowp()
  for i=0,3 do
-  if (btnp(i)) return i
+  if (btnp(i)) return btns[i+1]
  end
- 
+
  return -1
+end
+
+function rot(d,r)
+ return (d+r+4)%4
 end
 
 function rng(a,b)
  return flr(rnd(b-a))+a
+end
+
+function flash(a, b)
+ pal(7, pulse(8, a, b))
+end
+
+function pulse(p, a, b)
+ return timer % p < p/2 and a
+                        or  b
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
